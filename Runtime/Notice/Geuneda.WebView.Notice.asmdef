@@ -1,0 +1,27 @@
+{
+    "name": "Geuneda.WebView.Notice",
+    "rootNamespace": "Geuneda.WebView.Notice",
+    "references": [
+        "Geuneda.WebView",
+        "Geuneda.Notice",
+        "Geuneda.Core",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "GEUNEDA_WEBVIEW_NOTICE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.geuneda.notice",
+            "expression": "0.1.0",
+            "define": "GEUNEDA_WEBVIEW_NOTICE"
+        }
+    ],
+    "noEngineReferences": false
+}

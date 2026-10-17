@@ -1,0 +1,37 @@
+{
+    "name": "Geuneda.WebView.Coupon.Tests.EditMode",
+    "rootNamespace": "",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Geuneda.Core",
+        "Geuneda.Coupon",
+        "Geuneda.WebView",
+        "Geuneda.WebView.Coupon",
+        "Geuneda.WebView.Tests.EditMode",
+        "UniTask"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "GEUNEDA_WEBVIEW_COUPON"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.geuneda.coupon",
+            "expression": "0.1.0",
+            "define": "GEUNEDA_WEBVIEW_COUPON"
+        }
+    ],
+    "noEngineReferences": false
+}

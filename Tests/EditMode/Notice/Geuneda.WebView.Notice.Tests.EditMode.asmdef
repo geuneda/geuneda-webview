@@ -1,0 +1,38 @@
+{
+    "name": "Geuneda.WebView.Notice.Tests.EditMode",
+    "rootNamespace": "",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Geuneda.Core",
+        "Geuneda.Http",
+        "Geuneda.Notice",
+        "Geuneda.WebView",
+        "Geuneda.WebView.Notice",
+        "Geuneda.WebView.Tests.EditMode",
+        "UniTask"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "GEUNEDA_WEBVIEW_NOTICE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.geuneda.notice",
+            "expression": "0.1.0",
+            "define": "GEUNEDA_WEBVIEW_NOTICE"
+        }
+    ],
+    "noEngineReferences": false
+}

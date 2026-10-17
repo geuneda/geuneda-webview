@@ -1,0 +1,27 @@
+{
+    "name": "Geuneda.WebView.Coupon",
+    "rootNamespace": "Geuneda.WebView.Coupon",
+    "references": [
+        "Geuneda.WebView",
+        "Geuneda.Coupon",
+        "Geuneda.Core",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "GEUNEDA_WEBVIEW_COUPON"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.geuneda.coupon",
+            "expression": "0.1.0",
+            "define": "GEUNEDA_WEBVIEW_COUPON"
+        }
+    ],
+    "noEngineReferences": false
+}

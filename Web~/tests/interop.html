@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- 어댑터 상호 운용 테스트 페이지(com.geuneda.webview.gree 의 GreeWebViewInteropTest). Web~ 폴더를 정적 서버로 띄워 /tests/interop.html 로 엽니다. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>interop</title>
+</head>
+<body>
+<p id="state">loading</p>
+<!-- 키를 모르는 다른 출처(불투명 출처) 프레임: 네이티브 브리지로 직접 보내도 명령이 실행되면 안 된다 -->
+<iframe sandbox="allow-scripts" srcdoc="<script>
+  var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.unityControl;
+  var u = window.Unity;
+  function s(m) { var t = JSON.stringify(m); if (h) { h.postMessage(encodeURIComponent(t)); } else if (u) { u.call(t); } }
+  s({ type: 'ready', doc: 'iframe' });
+  s({ type: 'bound', doc: 'iframe', key: 'guess' });
+  s({ type: 'call', doc: 'iframe', id: '1', command: 'test.iframe', args: {} });
+  s({ type: 'call', doc: 'iframe', key: 'guess', id: '2', command: 'test.iframe', args: {} });
+</script>"></iframe>
+<script src="../geuneda-webview.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var text = 'A+B 50% 한글 \u2028 "quote"';
+  var state = document.getElementById('state');
+
+  // Unity 가 보낸 이벤트를 그대로 돌려준다
+  geuneda.on('test.ping', function (value) {
+    geuneda.call('test.pong', { n: value.n });
+  });
+
+  // 허용 출처 밖으로 이동을 시도한 뒤에도 이 페이지가 남아 있는지 알린다
+  geuneda.on('test.leave', function (value) {
+    window.location.href = value.url;
+    setTimeout(function () {
+      geuneda.call('test.stayed', { url: window.location.href });
+    }, 1500);
+  });
+
+  geuneda.call('test.echo', { text: text }).then(function (result) {
+    state.textContent = result.ok ? 'echoed' : 'failed ' + result.code;
+    return geuneda.call('test.done', { text: result.ok ? result.value.text : 'failed ' + result.code, unknown: 0 });
+  }).then(function () {
+    return geuneda.call('test.nothing');
+  }).then(function (result) {
+    geuneda.call('test.unknown', { code: result.code });
+  });
+})();
+</script>
+</body>
+</html>

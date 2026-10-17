@@ -1,0 +1,17 @@
+{
+  "name": "com.geuneda.webview",
+  "displayName": "Geuneda WebView",
+  "author": "geuneda",
+  "version": "0.1.0",
+  "unity": "2021.3",
+  "license": "MIT",
+  "description": "앱 안 웹뷰로 공지·쿠폰 같은 웹 페이지를 띄우고 페이지와 명령을 주고받습니다. 페이지는 함께 주는 JS 파일의 geuneda.call(명령, 인자) 로 Unity 명령을 부르고 요청 ID 로 짝지은 결과({ok, code, message, value})를 Promise 로 받으며, Unity 는 이벤트를 보냅니다. 허용한 출처의 페이지에서, Unity 가 메인 프레임에만 넘긴 키를 붙인 명령만 실행하고(다른 출처 iframe 차단), 다른 출처로는 이동하지 않으며 그 링크는 외부 브라우저로 엽니다. 페이지에 계정 토큰을 넘기지 않습니다. 화면은 게임이 준 RectTransform 영역(없으면 안전 영역)을 매 프레임 따라가고, 뒤로가기는 페이지 기록이 있으면 이전 페이지, 없으면 닫기입니다. 페이지와 연결돼야 열기 성공입니다. 공지(com.geuneda.notice)·쿠폰(com.geuneda.coupon) 명령은 그 패키지가 있을 때 켜지는 어셈블리에 있습니다. 네이티브 웹뷰는 어댑터(com.geuneda.webview.gree 등)가 IWebViewFactory 로 넣습니다.",
+  "type": "library",
+  "hideInEditor": false,
+  "dependencies": {
+    "com.geuneda.core": "0.4.0",
+    "com.cysharp.unitask": "2.5.10",
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.modules.ui": "1.0.0"
+  }
+}

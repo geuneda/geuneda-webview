@@ -1,0 +1,129 @@
+<!doctype html>
+<!-- 공지 페이지 샘플(com.geuneda.webview). 목록은 Unity 의 notice.list 가 줍니다. 분류는 ?category=event 처럼 넘깁니다. -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>공지</title>
+<style>
+  :root { color-scheme: light dark; --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --accent: #0a84ff; --dot: #ff3b30; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --fg: #f2f2f7; --muted: #98989d; --line: #38383a; } }
+  body { margin: 0; font: 15px/1.5 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  header { display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); }
+  header h1 { flex: 1; margin: 0; font-size: 17px; }
+  button { font: inherit; border: 0; background: none; color: var(--accent); padding: 8px; cursor: pointer; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { border-bottom: 1px solid var(--line); }
+  .row { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; color: inherit; padding: 12px 16px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dot); flex: none; }
+  .read .dot { visibility: hidden; }
+  .title { flex: 1; }
+  .date { color: var(--muted); font-size: 13px; }
+  .body { display: none; padding: 0 16px 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .open .body { display: block; }
+  .body a { color: var(--accent); }
+  #status { padding: 32px 16px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<header><h1>공지</h1><button id="refresh" type="button">새로고침</button><button id="close" type="button">닫기</button></header>
+<ul id="list"></ul>
+<p id="status" hidden></p>
+<script src="geuneda-webview.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var category = new URLSearchParams(window.location.search).get('category') || undefined;
+  var list = document.getElementById('list');
+  var status = document.getElementById('status');
+  var opened = {};
+  var language;
+
+  function show(text) {
+    status.textContent = text || '';
+    status.hidden = !text;
+  }
+
+  function element(tag, className, text) {
+    var node = document.createElement(tag);
+    node.className = className;
+
+    if (text) {
+      node.textContent = text;
+    }
+
+    return node;
+  }
+
+  function formatDate(iso) {
+    return iso ? new Date(iso).toLocaleDateString(language) : '';
+  }
+
+  // 공지 내용은 textContent 로만 넣습니다(innerHTML 금지)
+  function render(value) {
+    language = value.language;
+    list.textContent = '';
+    show(value.notices.length ? '' : '공지가 없습니다.');
+
+    value.notices.forEach(function (notice) {
+      var item = element('li', notice.read ? 'read' : '');
+      var row = element('button', 'row');
+      row.type = 'button';
+      row.append(element('span', 'dot'), element('span', 'title', notice.title), element('span', 'date', formatDate(notice.startsAt)));
+
+      var body = element('div', 'body', notice.body);
+
+      if (notice.linkUrl) {
+        var link = element('a', '', notice.linkLabel || notice.linkUrl);
+        link.href = notice.linkUrl;
+        body.append(document.createElement('br'), link);
+      }
+
+      if (opened[notice.id]) {
+        item.classList.add('open');
+      }
+
+      row.addEventListener('click', function () {
+        opened[notice.id] = item.classList.toggle('open');
+
+        if (!item.classList.contains('read')) {
+          item.classList.add('read');
+          geuneda.call('notice.read', { id: notice.id });
+        }
+      });
+
+      item.append(row, body);
+      list.appendChild(item);
+    });
+  }
+
+  function load() {
+    return geuneda.call('notice.list', { category: category }).then(function (result) {
+      if (result.ok) {
+        render(result.value);
+      } else {
+        show('공지를 불러오지 못했습니다. (' + result.code + ')');
+      }
+    });
+  }
+
+  document.getElementById('close').addEventListener('click', geuneda.close);
+  document.getElementById('refresh').addEventListener('click', function () {
+    geuneda.call('notice.refresh').then(function (result) {
+      if (!result.ok) {
+        show('새로 받지 못했습니다. (' + result.code + ')');
+        return;
+      }
+
+      load();
+    });
+  });
+
+  // 읽음 기록·문서 갱신·언어 변경 때 옵니다
+  geuneda.on('notice.changed', load);
+  load();
+})();
+</script>
+</body>
+</html>

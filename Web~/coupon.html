@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- 쿠폰 페이지 샘플(com.geuneda.webview). 사용 요청은 Unity 의 coupon.redeem 이 인증해 보냅니다(페이지는 토큰을 받지 않음). -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>쿠폰</title>
+<style>
+  :root { color-scheme: light dark; --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --accent: #0a84ff; --error: #ff3b30; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --fg: #f2f2f7; --muted: #98989d; --line: #38383a; } }
+  body { margin: 0; font: 15px/1.5 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  header { display: flex; align-items: center; padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { flex: 1; margin: 0; font-size: 17px; }
+  button { font: inherit; border: 0; background: none; color: var(--accent); padding: 8px; cursor: pointer; }
+  form { display: flex; gap: 8px; padding: 24px 16px 8px; }
+  input { flex: 1; min-width: 0; font: inherit; text-transform: uppercase; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; }
+  form button { background: var(--accent); color: #ffffff; border-radius: 8px; padding: 10px 16px; }
+  form button:disabled { opacity: 0.5; }
+  #message { padding: 0 16px; color: var(--muted); }
+  #message.error { color: var(--error); }
+</style>
+</head>
+<body>
+<header><h1>쿠폰</h1><button id="close" type="button">닫기</button></header>
+<form id="form">
+  <input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="쿠폰 코드" maxlength="80" required>
+  <button id="submit" type="submit">사용</button>
+</form>
+<p id="message"></p>
+<script src="geuneda-webview.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // 결과 코드별 문구(CouponResultCodes, core ResultCodes)
+  var failures = {
+    3: '응답이 없습니다. 다시 시도해 주세요.',
+    4: '네트워크에 연결할 수 없습니다.',
+    11001: '없는 쿠폰 코드입니다.',
+    11002: '아직 사용할 수 없는 쿠폰입니다.',
+    11003: '사용 기간이 끝난 쿠폰입니다.',
+    11004: '사용할 수 없는 쿠폰입니다.',
+    11006: '이미 사용된 쿠폰 코드입니다.',
+    11007: '모두 소진된 쿠폰입니다.',
+    11008: '사용 대상이 아닙니다.',
+    11009: '보상을 지급하지 못했습니다.',
+    11010: '보상 지급이 늦어지고 있습니다. 잠시 후 다시 시도해 주세요.',
+    11011: '시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.'
+  };
+
+  var form = document.getElementById('form');
+  var input = document.getElementById('code');
+  var submit = document.getElementById('submit');
+  var message = document.getElementById('message');
+
+  function show(text, isError) {
+    message.textContent = text;
+    message.className = isError ? 'error' : '';
+  }
+
+  document.getElementById('close').addEventListener('click', geuneda.close);
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    submit.disabled = true;
+    show('확인하는 중...');
+
+    geuneda.call('coupon.redeem', { code: input.value }).then(function (result) {
+      submit.disabled = false;
+
+      if (result.ok) {
+        show(result.value.alreadyRedeemed ? '이미 사용한 쿠폰입니다.' : '보상을 받았습니다. 우편함을 확인해 주세요.');
+        input.value = '';
+        return;
+      }
+
+      show((failures[result.code] || '쿠폰을 사용하지 못했습니다.') + ' (' + result.code + ')', true);
+    });
+  });
+})();
+</script>
+</body>
+</html>
