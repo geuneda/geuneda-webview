@@ -986,6 +986,205 @@ namespace Geuneda.WebView.Tests
 		}
 
 		[Test]
+		public void Layout_CanvasToScreen_UsesTheCanvasProportionsWhenTheScreenChangedFirst()
+		{
+			// Android 에서 Screen.SetResolution(540, 960) 을 부른 프레임: Screen 은 새 크기, 캔버스(가운데 피벗)와 영역은 옛 1080x1920 배치
+			var canvas = new Rect(-540, -960, 1080, 1920);
+			var frame = Rect.MinMaxRect(-324, -864, 486, 0);
+
+			var rect = WebViewLayout.CanvasToScreen(frame, canvas, new Rect(0, 0, 1, 1), new Vector2Int(540, 960));
+
+			AssertRect(Rect.MinMaxRect(108, 48, 513, 480), rect);
+			Assert.AreEqual(new WebViewMargins(108, 480, 27, 48), WebViewLayout.Margins(rect, 540, 960));
+		}
+
+		[Test]
+		public void Layout_CanvasToScreen_PlacesTheCanvasInTheCameraViewport()
+		{
+			var rect = WebViewLayout.CanvasToScreen(Rect.MinMaxRect(10, 20, 60, 120), new Rect(0, 0, 100, 200), new Rect(0.5f, 0, 0.5f, 1), new Vector2Int(1000, 2000));
+			AssertRect(Rect.MinMaxRect(550, 200, 800, 1200), rect);
+
+			// 화면 밖으로 나간 뷰포트는 0~1 로 자른다(Unity 가 그리는 범위)
+			rect = WebViewLayout.CanvasToScreen(Rect.MinMaxRect(0, 0, 100, 200), new Rect(0, 0, 100, 200), new Rect(-0.5f, 0, 1, 1), new Vector2Int(1000, 2000));
+			AssertRect(Rect.MinMaxRect(0, 0, 500, 2000), rect);
+		}
+
+		// 화면 크기(ScreenSize)만 540x960 으로 먼저 바뀌고 캔버스는 아직 1080x1920 인 프레임. 0.2.0 은 옛 모서리(화면 픽셀)를 새 화면 크기로 나눠 (216, 0, 0, 96) 을 보냈다
+		[TestCase(RenderMode.ScreenSpaceOverlay, false, 1f)]
+		[TestCase(RenderMode.ScreenSpaceOverlay, true, 1f)]
+		[TestCase(RenderMode.ScreenSpaceOverlay, false, 0.5f)]
+		[TestCase(RenderMode.ScreenSpaceCamera, false, 1f)]
+		public void Layout_ScreenSpaceCanvas_KeepsTheFrameProportionsWhenTheScreenChangesFirst(RenderMode mode, bool nested, float scale)
+		{
+			var root = new GameObject("WebViewCanvas", typeof(RectTransform));
+
+			try
+			{
+				var frame = CreateCanvasFrame(root, mode, null, nested, scale);
+				_service.ScreenSize = () => new Vector2Int(540, 960);
+				var native = OpenAndShow(frame);
+
+				_service.RefreshLayout();
+
+				CollectionAssert.AreEqual(new[] { new WebViewMargins(108, 480, 27, 48) }, native.Margins);
+			}
+			finally
+			{
+				Object.DestroyImmediate(root);
+			}
+		}
+
+		[Test]
+		public void Layout_CameraCanvas_PlacesTheFrameInTheCameraViewport()
+		{
+			var root = new GameObject("WebViewCanvas", typeof(RectTransform));
+			var cameraObject = new GameObject("WebViewCamera", typeof(Camera));
+
+			try
+			{
+				var camera = cameraObject.GetComponent<Camera>();
+				camera.rect = new Rect(0.25f, 0, 0.75f, 1);
+				cameraObject.transform.position = new Vector3(540, 960, -10);
+				var frame = CreateCanvasFrame(root, RenderMode.ScreenSpaceCamera, camera, false, 1f);
+				_service.ScreenSize = () => new Vector2Int(540, 960);
+				var native = OpenAndShow(frame);
+
+				_service.RefreshLayout();
+
+				// x: (0.25 + 0.2 x 0.75) x 540 = 216, (0.25 + 0.95 x 0.75) x 540 = 519.75
+				CollectionAssert.AreEqual(new[] { new WebViewMargins(216, 480, 20, 48) }, native.Margins);
+			}
+			finally
+			{
+				Object.DestroyImmediate(root);
+				Object.DestroyImmediate(cameraObject);
+			}
+		}
+
+		// 카메라 (0, 0, 0) 이 +z 를 보고 캔버스는 z=10 에 있다. 가운데 반 크기 영역을 z=20 으로만 옮기면 원근 카메라에서는 화면에서 다시 반으로 줄고, 직교 카메라에서는 그대로다
+		[TestCase(false, 405, 720)]
+		[TestCase(true, 270, 480)]
+		public void Layout_CameraCanvas_ProjectsAFrameOffTheCanvasPlaneAlongTheCameraRays(bool orthographic, int horizontal, int vertical)
+		{
+			var root = new GameObject("WebViewCanvas", typeof(RectTransform));
+			var cameraObject = new GameObject("WebViewCamera", typeof(Camera));
+
+			try
+			{
+				var camera = cameraObject.GetComponent<Camera>();
+				camera.orthographic = orthographic;
+				var canvas = root.AddComponent<Canvas>();
+				canvas.renderMode = RenderMode.ScreenSpaceCamera;
+				canvas.worldCamera = camera;
+				var rootRect = (RectTransform) root.transform;
+				rootRect.sizeDelta = new Vector2(1080, 1920);
+				rootRect.localScale = new Vector3(0.01f, 0.01f, 0.01f);
+				rootRect.position = new Vector3(0, 0, 10);
+				var frame = new GameObject("WebViewFrame", typeof(RectTransform)).GetComponent<RectTransform>();
+				frame.SetParent(rootRect, false);
+				Stretch(frame, new Vector2(0.25f, 0.25f), new Vector2(0.75f, 0.75f));
+				frame.position = new Vector3(0, 0, 20);
+				var native = OpenAndShow(frame);
+
+				_service.RefreshLayout();
+
+				CollectionAssert.AreEqual(new[] { new WebViewMargins(horizontal, vertical, horizontal, vertical) }, native.Margins);
+			}
+			finally
+			{
+				Object.DestroyImmediate(root);
+				Object.DestroyImmediate(cameraObject);
+			}
+		}
+
+		[Test]
+		public void Layout_ToCanvasPlane_FollowsTheCameraRay()
+		{
+			var plane = new Vector3(0, 0, 10);
+			var normal = Vector3.forward;
+
+			AssertVector(new Vector3(1, 2, 10), WebViewLayout.ToCanvasPlane(new Vector3(2, 4, 20), Vector3.zero, Vector3.forward, false, plane, normal));
+			AssertVector(new Vector3(2, 4, 10), WebViewLayout.ToCanvasPlane(new Vector3(2, 4, 20), Vector3.zero, Vector3.forward, true, plane, normal));
+			// 원근 카메라 뒤의 점, 평면과 나란한 시선은 그대로
+			AssertVector(new Vector3(1, 1, -5), WebViewLayout.ToCanvasPlane(new Vector3(1, 1, -5), Vector3.zero, Vector3.forward, false, plane, normal));
+			AssertVector(new Vector3(2, 4, 20), WebViewLayout.ToCanvasPlane(new Vector3(2, 4, 20), Vector3.zero, Vector3.right, true, plane, normal));
+		}
+
+		[Test]
+		public void Layout_WorldSpaceCanvas_ProjectsTheWorldCorners()
+		{
+			var root = new GameObject("WebViewCanvas", typeof(RectTransform));
+
+			try
+			{
+				root.AddComponent<Canvas>().renderMode = RenderMode.WorldSpace;
+				var frame = new GameObject("WebViewFrame", typeof(RectTransform)).GetComponent<RectTransform>();
+				frame.SetParent(root.transform, false);
+				frame.position = new Vector3(540, 960, 0);
+				frame.sizeDelta = new Vector2(800, 1200);
+				var native = OpenAndShow(frame);
+
+				_service.RefreshLayout();
+
+				// 카메라가 없는 WorldSpace 는 0.2.0 과 같이 월드 좌표를 화면 좌표로 본다
+				CollectionAssert.AreEqual(new[] { new WebViewMargins(140, 360, 140, 360) }, native.Margins);
+			}
+			finally
+			{
+				Object.DestroyImmediate(root);
+			}
+		}
+
+		// 루트 캔버스 1080x1920 월드 크기(배율 scale, 가운데 (540, 960)), 영역 anchor (0.2, 0.05)-(0.95, 0.5). 캔버스 배치를 기다리지 않게 RectTransform 을 직접 둔다
+		private static RectTransform CreateCanvasFrame(GameObject root, RenderMode mode, Camera camera, bool nested, float scale)
+		{
+			var canvas = root.AddComponent<Canvas>();
+			canvas.renderMode = mode;
+			canvas.worldCamera = camera;
+			var rootRect = (RectTransform) root.transform;
+			rootRect.sizeDelta = new Vector2(1080, 1920) / scale;
+			rootRect.localScale = new Vector3(scale, scale, scale);
+			rootRect.position = new Vector3(540, 960, 0);
+			var parent = rootRect;
+
+			if (nested)
+			{
+				var inner = new GameObject("WebViewNestedCanvas", typeof(RectTransform), typeof(Canvas)).GetComponent<RectTransform>();
+				inner.SetParent(rootRect, false);
+				Stretch(inner, Vector2.zero, Vector2.one);
+				parent = inner;
+			}
+
+			var frame = new GameObject("WebViewFrame", typeof(RectTransform)).GetComponent<RectTransform>();
+			frame.SetParent(parent, false);
+			Stretch(frame, new Vector2(0.2f, 0.05f), new Vector2(0.95f, 0.5f));
+			return frame;
+		}
+
+		private static void Stretch(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax)
+		{
+			rect.anchorMin = anchorMin;
+			rect.anchorMax = anchorMax;
+			rect.offsetMin = Vector2.zero;
+			rect.offsetMax = Vector2.zero;
+		}
+
+		private static void AssertVector(Vector3 expected, Vector3 actual)
+		{
+			Assert.AreEqual(expected.x, actual.x, 0.001f, "x");
+			Assert.AreEqual(expected.y, actual.y, 0.001f, "y");
+			Assert.AreEqual(expected.z, actual.z, 0.001f, "z");
+		}
+
+		private static void AssertRect(Rect expected, Rect actual)
+		{
+			Assert.AreEqual(expected.xMin, actual.xMin, 0.001f, "xMin");
+			Assert.AreEqual(expected.yMin, actual.yMin, 0.001f, "yMin");
+			Assert.AreEqual(expected.xMax, actual.xMax, 0.001f, "xMax");
+			Assert.AreEqual(expected.yMax, actual.yMax, 0.001f, "yMax");
+		}
+
+		[Test]
 		public void Dispose_ClosesAndRejectsNewOpens()
 		{
 			var native = OpenAndShow();

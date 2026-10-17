@@ -14,12 +14,12 @@ namespace Geuneda.WebView
 		{
 			private readonly WebViewService _owner;
 
-			public Session(WebViewService owner, RectTransform frame, Camera camera, string url, string key)
+			public Session(WebViewService owner, RectTransform frame, Canvas rootCanvas, string url, string key)
 			{
 				_owner = owner;
 				Frame = frame;
 				HasFrame = frame != null;
-				Camera = camera;
+				RootCanvas = rootCanvas;
 				PageUrl = url;
 				Key = key;
 			}
@@ -31,7 +31,8 @@ namespace Geuneda.WebView
 
 			public bool HasFrame { get; }
 
-			public Camera Camera { get; }
+			/// <summary>영역의 루트 캔버스(열 때 한 번 찾음)입니다. 영역이 없거나 캔버스 밖이면 null 입니다.</summary>
+			public Canvas RootCanvas { get; }
 
 			public CancellationTokenSource Cancellation { get; } = new CancellationTokenSource();
 

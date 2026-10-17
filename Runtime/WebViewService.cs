@@ -128,7 +128,7 @@ namespace Geuneda.WebView
 
 		private async UniTask<Result> OpenCoreAsync(string url, RectTransform frame, CancellationToken cancellationToken)
 		{
-			var session = new Session(this, frame, frame != null ? WebViewLayout.CameraOf(frame) : null, url, NewKey());
+			var session = new Session(this, frame, frame != null ? WebViewLayout.RootCanvasOf(frame) : null, url, NewKey());
 			_session = session;
 
 			try
@@ -275,6 +275,7 @@ namespace Geuneda.WebView
 				return false;
 			}
 
+			var size = ScreenSize();
 			Rect rect;
 
 			if (session.HasFrame)
@@ -286,14 +287,14 @@ namespace Geuneda.WebView
 					return false;
 				}
 
-				rect = WebViewLayout.ScreenRect(session.Frame, session.Camera, _corners);
+				// 화면 공간 캔버스는 캔버스 안의 비율에 이 화면 크기를 곱한다(화면 크기가 캔버스보다 먼저 바뀐 프레임에도 여백이 맞음)
+				rect = WebViewLayout.ScreenRect(session.Frame, session.RootCanvas, size, _corners);
 			}
 			else
 			{
 				rect = SafeArea();
 			}
 
-			var size = ScreenSize();
 			var margins = WebViewLayout.Margins(rect, size.x, size.y);
 
 			// 어댑터의 여백 적용은 네이티브 호출이라 바뀔 때만 한다. 여백이 같아도 화면 크기가 바뀌면 다시 넘긴다(데스크톱 gree 는 화면 크기 - 여백으로 뷰 크기를 정함)
