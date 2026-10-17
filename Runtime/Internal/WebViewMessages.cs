@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using Geuneda.Core;
@@ -226,12 +227,86 @@ namespace Geuneda.WebView
 
 		private static string Script(JObject message, string originCondition)
 		{
-			// U+2028·U+2029 는 JSON 에서는 되지만 ES2019 이전 JS 문자열 리터럴에서는 줄바꿈이다(옛 웹뷰에서 문법 오류)
-			var json = message.ToString(Formatting.None).Replace("\u2028", "\\u2028").Replace("\u2029", "\\u2029");
+			// 스크립트는 ASCII 로만 만든다. ASCII 가 아닌 글자는 모두 \uXXXX 로 내보내므로
+			// - 짝 없는 서로게이트도 JS 문자열에 그대로 간다. 날것으로 두면 어댑터가 UTF-8 로 바꾸다 깨져 스크립트가 통째로 사라진다
+			//   (gree iOS 는 [NSString stringWithUTF8String:] 이 nil, 페이지의 Promise 가 끝나지 않음. 2026-10-17 iOS 시뮬레이터)
+			// - U+2028·U+2029 도 이스케이프된다(ES2019 이전 JS 문자열 리터럴에서는 줄바꿈)
+			// - 네이티브 문자열 변환(IL2CPP UTF-8, JNI, Windows)에 기대지 않는다
+			// 값 안의 JRaw·주석은 이스케이프 설정을 거치지 않으므로 AsciiJsonWriter 가 따로 막는다(리뷰 1회차)
+			var json = new StringWriter(CultureInfo.InvariantCulture);
+
+			using (var writer = new AsciiJsonWriter(json))
+			{
+				message.WriteTo(writer);
+			}
 
 			// 실행 순간의 메인 프레임이 허용 출처일 때만 넘긴다. 마지막 로드 끝 주소만 믿으면, 이동 제한을 비껴간 이동(Android POST) 뒤 로드가 끝나기 전의
 			// 허용 밖 문서가 키를 받는다(리뷰 2회차 🔴)
+			// 출처는 ASCII 호스트만 받으므로(WebViewOrigins) 조건식도 ASCII 다
 			return "(function(o){if(" + originCondition + "){window.geuneda&&window.geuneda.__receive(" + json + ");}})(window.location.origin);";
+		}
+
+		/// <summary>
+		/// ASCII 로만 쓰는 JSON 쓰기입니다. 문자열과 속성 이름은 <see cref="StringEscapeHandling.EscapeNonAscii"/> 로 씁니다. 그 설정을 거치지 않는 날 JSON
+		/// (<see cref="JRaw"/>, 처리기 값의 변환기가 쓴 <c>WriteRawValue</c>)은 ASCII 가 아닌 코드 단위를 <c>\uXXXX</c> 로 바꿔 씁니다. 올바른 JSON 에서 ASCII 가 아닌
+		/// 글자는 문자열 안에만 올 수 있으므로 뜻이 같습니다. 주석은 데이터가 아니고 그대로 쓰이므로 쓰지 않습니다.
+		/// </summary>
+		private sealed class AsciiJsonWriter : JsonTextWriter
+		{
+			public AsciiJsonWriter(TextWriter writer) : base(writer)
+			{
+				Formatting = Formatting.None;
+				StringEscapeHandling = StringEscapeHandling.EscapeNonAscii;
+			}
+
+			// WriteRawValue 도 이것을 거친다
+			public override void WriteRaw(string json)
+			{
+				base.WriteRaw(EscapeNonAscii(json));
+			}
+
+			public override void WriteComment(string text)
+			{
+			}
+
+			private static string EscapeNonAscii(string text)
+			{
+				if (text == null)
+				{
+					return null;
+				}
+
+				var index = 0;
+
+				while (index < text.Length && text[index] < 0x80)
+				{
+					index++;
+				}
+
+				if (index == text.Length)
+				{
+					return text;
+				}
+
+				var builder = new StringBuilder(text.Length + 16);
+				builder.Append(text, 0, index);
+
+				for (; index < text.Length; index++)
+				{
+					var c = text[index];
+
+					if (c < 0x80)
+					{
+						builder.Append(c);
+					}
+					else
+					{
+						builder.Append('\\').Append('u').Append(((int) c).ToString("x4", CultureInfo.InvariantCulture));
+					}
+				}
+
+				return builder.ToString();
+			}
 		}
 
 		private static bool IsId(JToken id)

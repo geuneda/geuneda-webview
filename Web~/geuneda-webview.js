@@ -1,5 +1,5 @@
 /*
- * Geuneda WebView 브리지 (com.geuneda.webview 0.1.0). MIT License.
+ * Geuneda WebView 브리지 (com.geuneda.webview 0.2.0). MIT License.
  *
  * 페이지 스크립트보다 먼저 <script src="geuneda-webview.js"></script> 로(async·defer 없이) 넣습니다.
  * 이 파일이 브리지 준비를 알려야 Unity 의 웹뷰 열기가 성공합니다.
@@ -78,6 +78,16 @@
     return null;
   }
 
+  function serialize(message) {
+    message.doc = doc;
+
+    if (key !== null) {
+      message.key = key;
+    }
+
+    return JSON.stringify(message);
+  }
+
   function send(message) {
     var post = transport();
 
@@ -85,14 +95,48 @@
       return false;
     }
 
-    message.doc = doc;
+    post(serialize(message));
+    return true;
+  }
 
-    if (key !== null) {
-      message.key = key;
+  // 명령 하나를 보낸다. 인자를 JSON 으로 만들 수 없거나(순환 참조, BigInt) 전달 경로가 던지면 그 요청만 실패 결과로 끝낸다.
+  // 거절하지 않고, 키를 받기 전에 쌓인 대기열의 뒤 요청도 계속 보낸다
+  function deliver(message) {
+    var post = transport();
+    var text;
+
+    try {
+      text = serialize(message);
+    } catch (error) {
+      fail(message.id, codes.invalidArguments, 'Command args could not be serialized: ' + describe(error));
+      return;
     }
 
-    post(JSON.stringify(message));
-    return true;
+    try {
+      post(text);
+    } catch (error) {
+      fail(message.id, codes.unknown, 'Could not send the command: ' + describe(error));
+    }
+  }
+
+  // 던진 값은 Error 가 아닐 수 있다(Symbol, 문자열로 바꿀 수 없는 객체). 설명을 만들다 다시 던지지 않는다
+  function describe(error) {
+    try {
+      return String(error);
+    } catch (ignored) {
+      return 'unprintable error';
+    }
+  }
+
+  function fail(id, code, text) {
+    var resolve = pending[id];
+
+    if (!resolve) {
+      return;
+    }
+
+    delete pending[id];
+    resolve({ ok: false, code: code, message: text });
   }
 
   function call(command, args) {
@@ -109,7 +153,7 @@
       if (key === null) {
         queue.push(message);
       } else {
-        send(message);
+        deliver(message);
       }
     });
   }
@@ -126,7 +170,7 @@
     queue = [];
 
     for (var i = 0; i < waiting.length; i++) {
-      send(waiting[i]);
+      deliver(waiting[i]);
     }
   }
 

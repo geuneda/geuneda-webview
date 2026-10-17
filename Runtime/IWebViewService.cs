@@ -9,7 +9,8 @@ using UnityEngine;
 namespace Geuneda.WebView
 {
 	/// <summary>
-	/// 앱 안 웹뷰 하나입니다. 기본 구현은 <see cref="WebViewService"/> 이고, services 의 <c>MainInstaller</c> 에 이 인터페이스로 바인딩합니다.
+	/// 앱 안 웹뷰 하나입니다. 기본 구현은 <see cref="WebViewService"/> 이고, services 의 <c>MainInstaller</c> 에 이 인터페이스로 바인딩합니다
+	/// (정리는 <c>MainInstaller.CleanDispose&lt;IWebViewService&gt;()</c>).
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -22,8 +23,12 @@ namespace Geuneda.WebView
 	/// 명령은 이 열기의 키(메인 프레임에만 넘김)를 붙인 글만 실행하므로 다른 출처의 iframe 은 명령을 보낼 수 없습니다. 결과는 명령을 보낸 문서에만 갑니다.
 	/// </para>
 	/// <para>메인 스레드에서 씁니다. <see cref="Closed"/> 와 명령 처리기도 메인 스레드에서 옵니다.</para>
+	/// <para>
+	/// <see cref="IDisposable.Dispose"/> 는 열린 웹뷰를 닫고(열려 있었으면 <see cref="Closed"/>, 열기 중이면 그 열기는 <c>ResultCodes.Cancelled</c>) 그 뒤의 열기를 막습니다(<see cref="ObjectDisposedException"/>).
+	/// 여러 번 불러도 됩니다.
+	/// </para>
 	/// </remarks>
-	public interface IWebViewService
+	public interface IWebViewService : IDisposable
 	{
 		/// <summary>열고 있거나 열려 있으면 true 입니다.</summary>
 		bool IsOpen { get; }
@@ -45,6 +50,7 @@ namespace Geuneda.WebView
 		/// 취소·열기 중 닫기는 <c>ResultCodes.Cancelled</c>, 이미 열려 있으면 <c>ResultCodes.InProgress</c> 입니다. 실패하면 웹뷰를 버립니다.
 		/// </returns>
 		/// <exception cref="ArgumentException">주소가 허용한 출처의 http·https 절대 주소가 아닌 경우</exception>
+		/// <exception cref="ObjectDisposedException"><see cref="IDisposable.Dispose"/> 뒤에 부른 경우</exception>
 		UniTask<Result> OpenAsync(string url, RectTransform frame = null, CancellationToken cancellationToken = default);
 
 		/// <summary>웹뷰를 닫고 버립니다. 진행 중인 명령 처리기의 토큰을 취소하고 그 결과는 버립니다. 닫혀 있으면 아무것도 하지 않습니다.</summary>

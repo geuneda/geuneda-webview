@@ -16,7 +16,7 @@ namespace Geuneda.WebView
 	/// 기본 웹뷰입니다. 부트스트랩에서 만들어 <see cref="IWebViewService"/> 로 바인딩합니다. 규칙은 <see cref="IWebViewService"/> 를 봅니다.
 	/// <c>Dispose</c> 는 열린 웹뷰를 닫습니다.
 	/// </summary>
-	public sealed partial class WebViewService : IWebViewService, IDisposable
+	public sealed partial class WebViewService : IWebViewService
 	{
 		private static readonly ModuleLogger Logger = new ModuleLogger("Geuneda.WebView");
 

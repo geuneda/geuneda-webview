@@ -540,6 +540,118 @@ namespace Geuneda.WebView.Tests
 			Assert.AreEqual("a\u2028b\u2029c", (string) native.Result("1")["value"]);
 		}
 
+		// 짝 없는 서로게이트(앞·뒤), 이모지(서로게이트 쌍), U+2028·U+2029·U+0085, 한글, 라틴 확장, BOM. 소스에 이스케이프를 쓰지 않으려고 코드값으로 만든다
+		private static readonly string NonAscii = new string(new[]
+		{
+			'a', '+', ' ', '%', (char) 0xD83D, 'x', (char) 0xDE00, (char) 0xD83D, (char) 0xDE00, (char) 0x2028, (char) 0x2029, (char) 0x0085,
+			(char) 0xD55C, (char) 0xAE00, (char) 0x00E9, (char) 0xFEFF, (char) 0xD83D
+		});
+
+		/// <summary>ASCII 는 그대로, 그 밖의 UTF-16 코드 단위는 하나씩 소문자 <c>\uXXXX</c> 로 쓴 JSON 문자열(따옴표 포함)입니다. JS 는 이것을 같은 코드 단위로 읽습니다.</summary>
+		private static string EscapedJson(string text)
+		{
+			var builder = new System.Text.StringBuilder("\"");
+
+			foreach (var c in text)
+			{
+				if (c < 0x80)
+				{
+					builder.Append(c);
+				}
+				else
+				{
+					builder.Append('\\').Append('u').Append(((int) c).ToString("x4"));
+				}
+			}
+
+			return builder.Append('"').ToString();
+		}
+
+		private static void AssertAscii(string script)
+		{
+			for (var i = 0; i < script.Length; i++)
+			{
+				if (script[i] >= 0x80)
+				{
+					Assert.Fail($"Non-ASCII U+{(int) script[i]:X4} at {i}: {script}");
+				}
+			}
+		}
+
+		[Test]
+		public void Scripts_AreAsciiAndKeepEveryUtf16CodeUnit()
+		{
+			// 날것의 짝 없는 서로게이트는 어댑터의 UTF-8 변환에서 깨져 스크립트가 통째로 사라졌다(gree iOS, 2026-10-17)
+			_service.AddCommand("value", Returns(Result<object>.Ok(new JObject { ["text"] = NonAscii, [NonAscii] = 1 })));
+			_service.AddCommand("fail", Returns(Result<object>.Fail(WebViewResultCodes.InvalidArguments, NonAscii)));
+			var native = OpenAndShow();
+
+			native.Call("1", "value");
+			native.Call("2", "fail");
+			_service.Emit("notice.changed", new JObject { ["text"] = NonAscii });
+
+			Assert.AreEqual(3, native.Scripts.Count);
+			Assert.AreEqual(4, native.RawScripts.Count, "bind, result, result, event");
+
+			foreach (var script in native.RawScripts)
+			{
+				AssertAscii(script);
+			}
+
+			StringAssert.Contains("\"text\":" + EscapedJson(NonAscii), native.Scripts[0], "result value");
+			StringAssert.Contains(EscapedJson(NonAscii) + ":1", native.Scripts[0], "property name");
+			StringAssert.Contains("\"message\":" + EscapedJson(NonAscii), native.Scripts[1], "failure message");
+			StringAssert.Contains("\"text\":" + EscapedJson(NonAscii), native.Scripts[2], "event value");
+		}
+
+		[Test]
+		public void Scripts_AreAsciiForRawJsonAndDropComments()
+		{
+			// JRaw 와 주석은 StringEscapeHandling 을 거치지 않고 그대로 쓰인다(리뷰 1회차). 처리기 값·Emit 값 안 어디에 있어도 ASCII 여야 한다
+			var raw = "\"" + NonAscii + "\"";
+			_service.AddCommand("raw", Returns(Result<object>.Ok(new JObject
+			{
+				["raw"] = new JRaw(raw),
+				["list"] = new JArray(JValue.CreateComment(NonAscii), 1, new JRaw(raw))
+			})));
+			var native = OpenAndShow();
+
+			native.Call("1", "raw");
+			_service.Emit("notice.changed", new JObject { ["raw"] = new JRaw(raw) });
+
+			Assert.AreEqual(2, native.Scripts.Count);
+
+			foreach (var script in native.Scripts)
+			{
+				AssertAscii(script);
+				StringAssert.DoesNotContain("/*", script, "comments are not written");
+			}
+
+			StringAssert.Contains("\"raw\":" + EscapedJson(NonAscii), native.Scripts[0], "raw result value");
+			StringAssert.Contains("\"list\":[1," + EscapedJson(NonAscii) + "]", native.Scripts[0], "raw value in an array, comment dropped");
+			StringAssert.Contains("\"raw\":" + EscapedJson(NonAscii), native.Scripts[1], "raw event value");
+		}
+
+		[Test]
+		public void Dispose_ThroughTheInterface_ClosesTheWebViewOnce()
+		{
+			var native = OpenAndShow();
+
+			DisposeAsCleanDisposeDoes<IWebViewService>(_service);
+			DisposeAsCleanDisposeDoes<IWebViewService>(_service);
+
+			Assert.IsTrue(native.Disposed);
+			Assert.AreEqual(1, _closed);
+			Assert.IsFalse(_service.IsOpen);
+			Assert.Throws<ObjectDisposedException>(() => _service.OpenAsync(PageUrl).Forget());
+		}
+
+		// services 의 MainInstaller.CleanDispose<T>() 와 같은 제약이다. IWebViewService 가 IDisposable 이 아니면 컴파일되지 않는다(0.1.0)
+		private static void DisposeAsCleanDisposeDoes<T>(T instance) where T : class, IDisposable
+		{
+			instance.Dispose();
+		}
+
 		[Test]
 		public void Ready_GivesTheKeyToTheMainFrameAndOnlyBoundOpens()
 		{

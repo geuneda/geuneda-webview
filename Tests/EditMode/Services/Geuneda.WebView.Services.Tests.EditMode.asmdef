@@ -1,0 +1,35 @@
+{
+    "name": "Geuneda.WebView.Services.Tests.EditMode",
+    "rootNamespace": "",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Geuneda.Core",
+        "Geuneda.Services",
+        "Geuneda.WebView",
+        "Geuneda.WebView.Tests.EditMode",
+        "UniTask"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "GEUNEDA_WEBVIEW_SERVICES"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.geuneda.services",
+            "expression": "5.0.0",
+            "define": "GEUNEDA_WEBVIEW_SERVICES"
+        }
+    ],
+    "noEngineReferences": false
+}

@@ -9,7 +9,8 @@ const source = readFileSync(fileURLToPath(new URL('../geuneda-webview.js', impor
 const KEY = 'session-key';
 
 // 웹뷰 페이지 흉내: transport 는 'unity'(Android 의 window.Unity), 'webkit'(iOS·macOS 의 messageHandlers), null(일반 브라우저)
-function load({ transport = 'unity', href = 'https://notice.example.com/ko/index.html' } = {}) {
+// failCalls: 네이티브 전달 경로가 명령(call)을 보낼 때 던진다(true 면 Error, 그 밖의 값이면 그 값)
+function load({ transport = 'unity', href = 'https://notice.example.com/ko/index.html', failCalls = false } = {}) {
   const sent = [];
   const raw = [];
   const clickListeners = [];
@@ -20,7 +21,18 @@ function load({ transport = 'unity', href = 'https://notice.example.com/ko/index
   };
 
   if (transport === 'unity') {
-    window.Unity = { call: (text) => { raw.push(text); sent.push(JSON.parse(text)); } };
+    window.Unity = {
+      call: (text) => {
+        const message = JSON.parse(text);
+
+        if (failCalls && message.type === 'call') {
+          throw failCalls === true ? new Error('native bridge failed') : failCalls;
+        }
+
+        raw.push(text);
+        sent.push(message);
+      }
+    };
   } else if (transport === 'webkit') {
     // gree 의 iOS·macOS 처럼 받은 글을 URL 디코딩한다. iOS 는 window.Unity 도 주입하지만 webkit 경로가 먼저다
     window.Unity = { call: () => assert.fail('window.Unity must not be used when webkit handlers exist') };
@@ -174,6 +186,80 @@ test('unknown results and empty messages are ignored', async () => {
   geuneda.__receive(null);
   geuneda.__receive({ type: 'result', doc, id: '1', ok: true, code: 0 });
   assert.equal((await pending).ok, true);
+});
+
+test('a call whose args cannot be serialized resolves with invalidArguments instead of rejecting', async () => {
+  const { geuneda, sent, doc, bind } = load();
+  bind();
+  const args = {};
+  args.self = args;
+
+  const result = await geuneda.call('test.echo', args);
+  const big = await geuneda.call('test.echo', { n: 10n });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 12003);
+  assert.match(result.message, /could not be serialized/);
+  assert.equal(big.code, 12003);
+  assert.equal(sent.length, 2, 'only ready and bound went out');
+
+  geuneda.call('notice.refresh');
+  assert.deepEqual(plain(sent[2]), { type: 'call', id: '3', command: 'notice.refresh', args: {}, doc, key: KEY });
+});
+
+test('a queued call that cannot be serialized does not hold back the calls after it', async () => {
+  const { geuneda, sent, doc, bind } = load();
+  const args = {};
+  args.self = args;
+  const bad = geuneda.call('test.echo', args);
+  geuneda.call('notice.list', { category: 'event' });
+
+  bind();
+
+  assert.deepEqual(plain(sent.slice(1)), [
+    { type: 'bound', doc, key: KEY },
+    { type: 'call', id: '2', command: 'notice.list', args: { category: 'event' }, doc, key: KEY }
+  ]);
+  assert.equal((await bad).code, 12003);
+});
+
+test('a native bridge exception resolves the call with unknown', async () => {
+  const { geuneda, bind } = load({ failCalls: true });
+  const queued = geuneda.call('notice.list');
+  bind();
+  const direct = geuneda.call('notice.refresh');
+
+  assert.deepEqual(plain(await queued), { ok: false, code: 1, message: 'Could not send the command: Error: native bridge failed' });
+  assert.equal((await direct).code, 1);
+});
+
+test('a thrown value that cannot be printed still ends only that call', async () => {
+  const { geuneda, sent, doc, bind } = load();
+  const symbol = { toJSON() { throw Symbol('serialization failed'); } };
+  const bare = { toJSON() { throw Object.create(null); } };
+  const queued = geuneda.call('test.echo', symbol);
+  geuneda.call('notice.list');
+
+  bind();
+  const direct = geuneda.call('test.echo', bare);
+
+  assert.deepEqual(plain(sent.slice(1)), [
+    { type: 'bound', doc, key: KEY },
+    { type: 'call', id: '2', command: 'notice.list', args: {}, doc, key: KEY }
+  ]);
+  // '...' + symbol 은 TypeError 를 던진다. String(symbol) 은 되고, 프로토타입 없는 객체는 문자열로 바꿀 수 없다
+  assert.deepEqual(plain(await queued), { ok: false, code: 12003, message: 'Command args could not be serialized: Symbol(serialization failed)' });
+  assert.deepEqual(plain(await direct), { ok: false, code: 12003, message: 'Command args could not be serialized: unprintable error' });
+});
+
+test('a native bridge that throws an unprintable value resolves the call with unknown', async () => {
+  const { geuneda, bind } = load({ failCalls: Object.create(null) });
+  const queued = geuneda.call('notice.list');
+  bind();
+  const direct = geuneda.call('notice.refresh');
+
+  assert.deepEqual(plain(await queued), { ok: false, code: 1, message: 'Could not send the command: unprintable error' });
+  assert.equal((await direct).code, 1);
 });
 
 test('call outside the app resolves with bridgeUnavailable', async () => {

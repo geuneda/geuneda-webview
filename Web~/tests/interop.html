@@ -25,6 +25,20 @@
   var text = 'A+B 50% 한글 \u2028 "quote"';
   var state = document.getElementById('state');
 
+  // UTF-16 코드 단위를 16진수로 적는다. 페이지 -> Unity 는 짝 없는 서로게이트를 U+FFFD 로 받으므로, Unity -> 페이지 글이 그대로 왔는지는 이 값으로 돌려준다
+  function hex(s) {
+    var h = '';
+    for (var i = 0; i < s.length; i++) {
+      h += (s.charCodeAt(i) + 0x10000).toString(16).substring(1);
+    }
+    return h;
+  }
+
+  // Unity 가 보낸 이벤트의 글(짝 없는 서로게이트·이모지·U+2028)을 코드 단위로 돌려준다
+  geuneda.on('test.text', function (value) {
+    geuneda.call('test.textEvent', { hex: hex(value.text) });
+  });
+
   // Unity 가 보낸 이벤트를 그대로 돌려준다
   geuneda.on('test.ping', function (value) {
     geuneda.call('test.pong', { n: value.n });
@@ -44,7 +58,12 @@
   }).then(function () {
     return geuneda.call('test.nothing');
   }).then(function (result) {
-    geuneda.call('test.unknown', { code: result.code });
+    return geuneda.call('test.unknown', { code: result.code });
+  }).then(function () {
+    // 결과에 담긴 글(짝 없는 서로게이트·이모지·U+2028)도 코드 단위로 돌려준다
+    return geuneda.call('test.text');
+  }).then(function (result) {
+    geuneda.call('test.textResult', { hex: result.ok ? hex(result.value.text) : 'failed ' + result.code });
   });
 })();
 </script>
